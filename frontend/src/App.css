@@ -1,0 +1,441 @@
+.page {
+  --gold: #d4af37;
+  --gold-soft: #f0d58a;
+  --cream: #f3ead9;
+  --muted: #a89a80;
+  --line: rgba(212, 175, 55, 0.18);
+  position: relative;
+  z-index: 1;
+  width: min(1180px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 26px 40px 36px;
+  display: flex;
+  flex-direction: column;
+}
+
+.glow {
+  position: fixed;
+  z-index: 0;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+.glow-left {
+  top: -180px;
+  left: -160px;
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.glow-right {
+  right: -220px;
+  bottom: -120px;
+  background: rgba(122, 82, 12, 0.2);
+}
+
+/* ---------------------------------------------------------------- topbar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+  animation: fade-in 0.6s ease both;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0.02));
+  color: var(--gold-soft);
+  font-family: Georgia, serif;
+  font-size: 1.3rem;
+  box-shadow: inset 0 0 18px rgba(212, 175, 55, 0.12);
+}
+
+.brand-name {
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+
+.phase-chip {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ hero */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  gap: clamp(36px, 6vw, 72px);
+  align-items: center;
+  padding: clamp(52px, 8vh, 86px) 0 clamp(44px, 6vh, 64px);
+}
+
+.hero-copy {
+  animation: rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.eyebrow,
+.card-eyebrow {
+  color: var(--gold);
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 18px 0 20px;
+  font-size: clamp(2.3rem, 4.4vw, 3.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  max-width: 19ch;
+}
+
+.gold {
+  background: linear-gradient(100deg, #b8860b 0%, #f6e27a 45%, #d4af37 75%, #a97c14 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lede {
+  max-width: 54ch;
+  color: #cbbfa8;
+  font-size: 1.02rem;
+  line-height: 1.72;
+}
+
+.highlights {
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.highlights li {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  color: #d9cdb7;
+  font-size: 0.93rem;
+  line-height: 1.5;
+}
+
+.tick {
+  flex: none;
+  color: rgba(212, 175, 55, 0.85);
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+/* ---------------------------------------------------------- status card */
+
+.status-card {
+  position: relative;
+  padding: 26px 26px 18px;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 20px;
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 55%),
+    rgba(14, 11, 8, 0.72);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px);
+  animation: rise 0.9s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.status-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, rgba(246, 226, 122, 0.5), transparent 35%, transparent 70%, rgba(212, 175, 55, 0.25));
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.status-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+}
+
+.status-header h2 {
+  margin-top: 6px;
+  font-size: 1.5rem;
+  color: var(--cream);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.badge-good {
+  color: #8fdc9a;
+  background: rgba(72, 187, 96, 0.1);
+  border: 1px solid rgba(72, 187, 96, 0.25);
+}
+
+.badge-bad {
+  color: #f0a48c;
+  background: rgba(220, 92, 60, 0.1);
+  border: 1px solid rgba(220, 92, 60, 0.3);
+}
+
+.badge-pending {
+  color: var(--gold-soft);
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+.status-body {
+  display: grid;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.status-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.status-value {
+  color: #e8ddc8;
+  font-family: ui-monospace, 'SFMono-Regular', monospace;
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.status-value.is-good::before,
+.status-value.is-bad::before {
+  content: '●';
+  margin-right: 7px;
+  font-size: 0.55rem;
+  vertical-align: 1px;
+}
+
+.status-value.is-good::before {
+  color: #6fcf7f;
+}
+
+.status-value.is-bad::before {
+  color: #e07a5f;
+}
+
+.status-error {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(220, 92, 60, 0.28);
+  border-radius: 10px;
+  background: rgba(220, 92, 60, 0.07);
+  color: #eab4a4;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.error-detail {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  word-break: break-word;
+}
+
+.status-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: #857a67;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+/* -------------------------------------------------------------- features */
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  animation: fade-in 1s 0.3s ease both;
+}
+
+.feature {
+  position: relative;
+  padding: 26px 26px 30px;
+}
+
+.feature + .feature {
+  border-left: 1px solid var(--line);
+}
+
+.feature-rule {
+  display: block;
+  width: 26px;
+  height: 1px;
+  margin-bottom: 16px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+.feature h3 {
+  color: var(--cream);
+  font-size: 1.12rem;
+  margin-bottom: 8px;
+}
+
+.feature p {
+  color: #9e927d;
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 26px;
+  color: #7d7261;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+}
+
+.stack {
+  color: #9a8d75;
+}
+
+/* ------------------------------------------------------------- animación */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 920px) {
+  .page {
+    padding: 22px 24px 30px;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+    padding-top: 44px;
+  }
+
+  .hero h1 {
+    max-width: 22ch;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feature + .feature {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 560px) {
+  .phase-chip {
+    display: none;
+  }
+
+  .status-card {
+    padding: 22px 18px 16px;
+  }
+
+  .status-footer {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
