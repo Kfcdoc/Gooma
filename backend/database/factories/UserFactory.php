@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Client;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -12,14 +13,9 @@ use Illuminate\Support\Str;
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
     protected static ?string $password;
 
     /**
-     * Define the model's default state.
-     *
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -29,13 +25,48 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => User::ROLE_GESTOR,
+            'client_id' => null,
+            'active' => true,
             'remember_token' => Str::random(10),
         ];
     }
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => User::ROLE_ADMIN,
+            'client_id' => null,
+        ]);
+    }
+
+    public function gestor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => User::ROLE_GESTOR,
+            'client_id' => null,
+        ]);
+    }
+
+    public function cliente(Client|string|null $client = null): static
+    {
+        return $this->state(function () use ($client) {
+            $clientId = $client instanceof Client ? $client->getKey() : $client;
+
+            return [
+                'role' => User::ROLE_CLIENTE,
+                'client_id' => $clientId ?? Client::factory()->create()->getKey(),
+            ];
+        });
+    }
+
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'active' => false,
+        ]);
+    }
+
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [

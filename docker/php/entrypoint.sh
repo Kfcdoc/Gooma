@@ -19,21 +19,24 @@ if ! grep -q '^APP_KEY=base64:' .env; then
     php artisan key:generate --ansi --force
 fi
 
-# 3. Dependencias: el volumen nombrado puede quedar vacío o desactualizado.
-if [ ! -f vendor/autoload.php ]; then
-    echo "→ Instalando dependencias de Composer"
-    COMPOSER_ALLOW_SUPERUSER=1 composer install \
-        --no-interaction \
-        --prefer-dist \
-        --optimize-autoloader
-fi
+# 3. Dependencias: se sincronizan con composer.lock en cada arranque.
+#    (El volumen nombrado vendor puede quedar desactualizado tras un rebuild.)
+echo "→ Sincronizando dependencias de Composer"
+COMPOSER_ALLOW_SUPERUSER=1 composer install \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
 
 # 4. Carpetas de escritura de Laravel.
 mkdir -p storage/framework/cache storage/framework/sessions \
          storage/framework/views storage/logs bootstrap/cache
 chmod -R ug+rwX storage bootstrap/cache
 
-# 5. Limpiar cachés de configuración/rutas para reflejar cambios del código.
+# 5. Migraciones e índices de MongoDB (idempotente).
+echo "→ Aplicando migraciones de MongoDB"
+php artisan migrate --force --no-interaction
+
+# 6. Limpiar cachés de configuración/rutas para reflejar cambios del código.
 php artisan config:clear >/dev/null 2>&1 || true
 php artisan route:clear >/dev/null 2>&1 || true
 

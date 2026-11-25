@@ -12,9 +12,11 @@ La especificación funcional completa (licitación, reglas de negocio RN-01 a
 RN-23, procesos, casos de uso CU-01 a CU-16, cronograma e investigación) vive en
 [`docs/Gooma.md`](docs/Gooma.md) y es la fuente de verdad del proyecto.
 
-> **Estado actual: Fase 1 completada.** La infraestructura Docker, la API base y
-> la SPA ya levantan con un solo comando. Los módulos de negocio se agregan en
-> las siguientes fases (ver [Roadmap](#roadmap)).
+> **Estado actual: Fase 2 completada.** Infraestructura Docker, autenticación con
+> Sanctum sobre MongoDB, roles (administrador, gestor, cliente), modelo de datos
+> de proyectos con `manager_id`, catálogo de roles y tarifas, y seeder que cuadra
+> exacto con el presupuesto de la sección 1.7. Los endpoints de negocio se agregan
+> en las siguientes fases (ver [Roadmap](#roadmap)).
 
 ---
 
@@ -26,7 +28,7 @@ RN-23, procesos, casos de uso CU-01 a CU-16, cronograma e investigación) vive e
 | Base de datos | MongoDB 8 como **replica set de un nodo** (transacciones) |
 | Driver | `mongodb/laravel-mongodb` + extensión PHP `mongodb` |
 | Frontend | React 19 + Vite 8 + TypeScript |
-| Autenticación | Laravel Sanctum con tokens (fase 2) |
+| Autenticación | Laravel Sanctum con tokens Bearer (guardados en MongoDB) |
 | Reportes | DomPDF + Maatwebsite/Excel (fase 5) |
 | Gráfica | d3-sankey (fase 6) |
 | Orquestación | Docker Compose |
@@ -84,7 +86,15 @@ docker compose up --build
 
 La primera ejecución tarda unos minutos: compila la extensión de MongoDB para
 PHP e instala dependencias de Composer y npm. Las siguientes son mucho más
-rápidas.
+rápidas. Las migraciones e índices de MongoDB se aplican solos al arrancar el
+backend.
+
+Con los contenedores arriba, carga el catálogo de roles/tarifas, los usuarios,
+el cliente y el proyecto demo:
+
+```bash
+docker compose exec backend php artisan migrate --seed
+```
 
 Cuando termine:
 
@@ -127,6 +137,83 @@ docker compose exec mongo mongosh goomaps     # consola de MongoDB
 docker compose exec frontend npm run build    # verificar TypeScript
 ```
 
+## API v1
+
+La API es stateless: `POST /api/v1/auth/login` devuelve un token Bearer que debe
+enviarse en `Authorization: Bearer <token>`. Los tokens se guardan **hasheados**
+en la colección `personal_access_tokens` de MongoDB.
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| `GET` | `/api/v1/health` | Público |
+| `POST` | `/api/v1/auth/login` | Público (máx. 6 intentos/minuto) |
+| `POST` | `/api/v1/auth/logout` | Autenticado (revoca el token actual) |
+| `POST` | `/api/v1/auth/logout-all` | Autenticado (revoca todas las sesiones) |
+| `GET` | `/api/v1/auth/me` | Autenticado |
+| `GET/POST` | `/api/v1/users` | Solo administrador |
+| `GET/PUT/DELETE` | `/api/v1/users/{id}` | Solo administrador |
+
+```bash
+# Iniciar sesión
+curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -d '{"email":"admin@goomaps.local","password":"password"}'
+
+# Consultar el perfil con el token recibido
+curl -s http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer <token>" -H 'Accept: application/json'
+```
+
+Las respuestas de recursos usan el envoltorio `data` de Laravel; el login
+devuelve directamente `{ token, token_type, user }`. Los errores de validación
+llegan con HTTP 422, la falta de sesión con 401 y los permisos insuficientes
+con 403.
+
+## Modelo de datos y decisiones
+
+Colecciones de MongoDB (los índices se crean con `migrate`):
+
+| Colección | Contenido |
+|---|---|
+| `users` | Cuentas con rol de acceso `admin` / `gestor` / `cliente` (RN-19). |
+| `clients` | Clientes contratantes; el usuario cliente se vincula por `client_id`. |
+| `personal_access_tokens` | Tokens Sanctum hasheados, en MongoDB. |
+| `roles` | Catálogo de **roles de trabajo** (RN-03/RN-04), distinto de los roles de acceso. |
+| `role_rates` | Tarifa por hora, divisa y vigencia (`effective_from` / `effective_to`). |
+| `projects` | `client_id`, `manager_id`, snapshot de `budget_lines`, `extras` y `budget`. |
+
+RN-01 se cumple con `projects.manager_id`; `Project::isVisibleBy()` ya aplica
+RN-20 (administrador ve todo, gestor ve los suyos, cliente ve el suyo). Los
+montos se guardan en centavos enteros (`*_cents`) para que los totales cuadren
+sin error de coma flotante.
+
+### Presupuesto demo (sección 1.7)
+
+| Concepto | Cálculo | MXN |
+|---|---|---:|
+| Costo base | 600 h × tarifas por rol | 227,000.00 |
+| Imprevistos | 10% del costo base, necesario | 22,700.00 |
+| Riesgo tecnológico | 5% del costo base, opcional activo | 11,350.00 |
+| Margen de ganancia | 15% del costo base, necesario | 34,050.00 |
+| Subtotal | Costo base + extras | 295,100.00 |
+| IVA | 16% del subtotal, necesario | 47,216.00 |
+| **Total** | | **342,316.00** |
+| Sin riesgo opcional | Escenario alterno de 6.3.4 | 329,150.00 |
+
+Decisiones que también quedan registradas para las siguientes fases:
+
+- El margen del 15% es una **línea de extras** sobre el costo base (RN-15), no
+  un margen calculado sobre ventas.
+- Saldo facturable = `total − anticipos aplicados − facturas no canceladas`
+  (se aplicará en la fase 4).
+- El Mapa del Dinero usa la **tasa vigente**; cada movimiento guarda su propio
+  **snapshot del tipo de cambio** para reportes (fases 4 y 6).
+- Las facturas solo tienen dos estados: `emitida` o `cancelada`. Una factura
+  emitida no se edita; se cancela con motivo y se genera otra (RN-09).
+- Los gastos no generan IVA acreditable y no afectan el margen (fase 4).
+- El cliente nunca ve tarifas individuales por persona, solo montos agregados
+  (RN-21), cuando se construya el portal en la fase 6.
+
 ## Variables de entorno
 
 ### Raíz (`.env`, opcional)
@@ -168,7 +255,7 @@ El `.env` real nunca se versiona.
 
 ## Usuarios de prueba
 
-Se crean con los seeders en la **fase 2**:
+Se crean con `docker compose exec backend php artisan migrate --seed`:
 
 | Rol | Correo | Contraseña |
 |---|---|---|
@@ -176,15 +263,23 @@ Se crean con los seeders en la **fase 2**:
 | Gestor | `gestor@goomaps.local` | `password` |
 | Cliente | `cliente@goomaps.local` | `password` |
 
+El cliente demo queda vinculado a **Constructora del Valle** y el gestor demo
+es el responsable (`manager_id`) del proyecto `GOOMAPS-2026`. El seeder es
+idempotente: puede ejecutarse varias veces sin duplicar cuentas, roles ni
+proyectos, y sin cambiar contraseñas existentes.
+
 ## Pruebas
 
 ```bash
 docker compose exec backend php artisan test
 ```
 
-En la fase 1 solo corre la prueba de ejemplo del esqueleto. La suite completa
-llega en la fase 7 con: cálculo de extras e IVA, RN-07 (tope de facturación),
-inmutabilidad del tipo de cambio, bitácora no editable y permisos por rol.
+La fase 2 cubre 20 pruebas: login, credenciales inválidas, usuarios
+desactivados, `/me`, revocación de tokens, RBAC por rol (admin/gestor/cliente),
+validación de usuarios, hash de contraseñas, seeder idempotente, catálogo de
+tarifas con historial (RN-04), presupuesto exacto de la sección 1.7 y el
+diagnóstico de infraestructura. Las pruebas usan la base `goomaps_test` y
+jamás tocan `goomaps`; la suite completa de negocio se amplía en la fase 7.
 
 ## Estructura del proyecto
 
@@ -200,13 +295,21 @@ goomaps/
 │   └── frontend/Dockerfile     # Node 24 + Vite
 ├── backend/                    # Laravel 13 (API-only)
 │   ├── app/
-│   │   ├── Domain/             # reglas de negocio puras (siguientes fases)
-│   │   ├── Http/Controllers/Api/V1/
-│   │   ├── Models/
-│   │   └── Services/
+│   │   ├── Domain/Costs/       # BudgetCalculator (RN-15, montos en centavos)
+│   │   ├── Http/
+│   │   │   ├── Controllers/Api/V1/  # health, auth y usuarios
+│   │   │   ├── Middleware/     # role y active
+│   │   │   ├── Requests/       # validación de login y usuarios
+│   │   │   └── Resources/      # representación JSON de modelos
+│   │   ├── Models/             # User, Client, Role, RoleRate, Project, tokens (MongoDB)
+│   │   └── Services/           # orquestación (siguientes fases)
 │   ├── config/                 # database.php incluye la conexión mongodb
+│   ├── database/
+│   │   ├── migrations/         # colecciones e índices de MongoDB
+│   │   ├── factories/          # datos falsos para pruebas
+│   │   └── seeders/            # CatalogSeeder + DemoSeeder (presupuesto 1.7)
 │   ├── routes/api.php          # /api/v1
-│   └── tests/
+│   └── tests/                  # Unit + Feature (base goomaps_test)
 └── frontend/                   # React + Vite + TypeScript
     └── src/
         ├── lib/api.ts          # cliente HTTP base
@@ -217,8 +320,11 @@ goomaps/
 ## Roadmap
 
 - [x] **Fase 1.** Docker base (Mongo replica set, backend, frontend) y repositorio.
-- [ ] **Fase 2.** Modelo de datos y autenticación con Sanctum (roles RN-19/20).
-- [ ] **Fase 3.** Clientes, proyectos, equipo, tarifas por fecha, tecnologías y horas.
+- [x] **Fase 2.** Modelo MongoDB (proyectos con `manager_id`, catálogo
+  `roles`/`role_rates`), autenticación Sanctum, roles RN-19/20 y seeder exacto
+  de la sección 1.7.
+- [ ] **Fase 3.** Endpoints de clientes, proyectos, equipo, tarifas vigentes,
+  tecnologías y horas.
 - [ ] **Fase 4.** Anticipos, facturas, gastos, costos extra y divisas.
 - [ ] **Fase 5.** Bitácora de auditoría y reportes PDF/Excel.
 - [ ] **Fase 6.** Mapa del Dinero y portal del cliente.
@@ -239,7 +345,8 @@ arranca cuando `mongo-init` termina correctamente; si borraste los volúmenes,
 `mongo-init` vuelve a inicializar `rs0` solo.
 
 **Cambié `composer.json` y no se refleja** — `docker compose up --build`. El
-volumen `backend_vendor` conserva dependencias entre arranques.
+entrypoint sincroniza `vendor` con `composer.lock` en cada arranque; si algo
+quedó corrupto, `docker compose down -v` y vuelve a levantar.
 
 **Permisos en `storage/`** — el entrypoint ajusta permisos en cada arranque; si
 persiste, ejecuta `sudo chown -R $USER:$USER backend/storage backend/bootstrap/cache`.
