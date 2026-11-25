@@ -46,7 +46,7 @@ RN-23, procesos, casos de uso CU-01 a CU-16, cronograma e investigación) vive e
                                                                      │ driver mongodb
                                                           ┌──────────▼──────────┐
                                                           │  mongo (rs0)        │
-                                                          │  localhost:27017    │
+                                                          │  localhost:27019    │
                                                           └─────────────────────┘
 ```
 
