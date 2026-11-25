@@ -21,7 +21,7 @@ abstract class TestCase extends BaseTestCase
         DB::purge();
 
         $this->ensureUsingTestDatabase();
-        $this->clearMongoDatabase();
+        $this->clearMongoCollections();
     }
 
     /**
@@ -39,10 +39,19 @@ abstract class TestCase extends BaseTestCase
         }
     }
 
-    /** MongoDB no usa transacciones de esquema: se limpia la base entre pruebas. */
-    private function clearMongoDatabase(): void
+    /**
+     * MongoDB no usa transacciones de esquema: se vacían las colecciones entre
+     * pruebas. Conservar los índices evita recrear la base 48 veces por suite,
+     * lo que en este entorno llegó a reiniciar WiredTiger.
+     */
+    private function clearMongoCollections(): void
     {
-        $connection = DB::connection();
-        $connection->getDatabase()->drop();
+        $database = DB::connection()->getDatabase();
+
+        foreach ($database->listCollectionNames() as $name) {
+            if (! str_starts_with($name, 'system.')) {
+                $database->selectCollection($name)->deleteMany([]);
+            }
+        }
     }
 }

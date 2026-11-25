@@ -5,8 +5,10 @@ namespace Database\Seeders;
 use App\Domain\Costs\BudgetCalculator;
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\ProjectTechnology;
 use App\Models\Role;
 use App\Models\RoleRate;
+use App\Models\Technology;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -104,7 +106,7 @@ class DemoSeeder extends Seeder
         $budget['currency'] = RoleRate::CURRENCY_MXN;
         $budget['calculated_at'] = now()->toIso8601String();
 
-        Project::updateOrCreate(
+        $project = Project::updateOrCreate(
             ['code' => 'GOOMAPS-2026'],
             [
                 'name' => 'GooMaps — Mapa del Dinero',
@@ -115,6 +117,8 @@ class DemoSeeder extends Seeder
                 'start_date' => '2026-11-25',
                 'end_date' => '2027-01-20',
                 'status' => Project::STATUS_ACTIVE,
+                'show_rates_to_client' => false,
+                'actual_cost_cents' => 0,
                 'budget_initial_cents' => $budget['total_cents'],
                 'budget_initial_currency' => RoleRate::CURRENCY_MXN,
                 'budget_lines' => $budgetLines,
@@ -122,6 +126,21 @@ class DemoSeeder extends Seeder
                 'budget' => $budget,
             ],
         );
+
+        foreach (CatalogSeeder::technologies() as $technology) {
+            $model = Technology::where('slug', $technology['slug'])->firstOrFail();
+
+            ProjectTechnology::updateOrCreate(
+                [
+                    'project_id' => $project->getKey(),
+                    'technology_id' => $model->getKey(),
+                ],
+                [
+                    'version' => null,
+                    'notes' => null,
+                ],
+            );
+        }
     }
 
     /**

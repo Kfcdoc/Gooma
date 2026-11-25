@@ -12,11 +12,12 @@ La especificación funcional completa (licitación, reglas de negocio RN-01 a
 RN-23, procesos, casos de uso CU-01 a CU-16, cronograma e investigación) vive en
 [`docs/Gooma.md`](docs/Gooma.md) y es la fuente de verdad del proyecto.
 
-> **Estado actual: Fase 2 completada.** Infraestructura Docker, autenticación con
-> Sanctum sobre MongoDB, roles (administrador, gestor, cliente), modelo de datos
-> de proyectos con `manager_id`, catálogo de roles y tarifas, y seeder que cuadra
-> exacto con el presupuesto de la sección 1.7. Los endpoints de negocio se agregan
-> en las siguientes fases (ver [Roadmap](#roadmap)).
+> **Estado actual: Fase 3 completada.** Infraestructura Docker, autenticación con
+> Sanctum sobre MongoDB, roles (administrador, gestor, cliente), proyectos con
+> `manager_id`, catálogo de roles/tarifas/tecnologías y API REST de clientes,
+> proyectos, equipo, tarifas vigentes por fecha, tecnologías y horas. El seeder
+> cuadra exacto con el presupuesto de la sección 1.7. Los movimientos financieros
+> y reportes llegan en las fases 4 y 5 (ver [Roadmap](#roadmap)).
 
 ---
 
@@ -153,6 +154,34 @@ en la colección `personal_access_tokens` de MongoDB.
 | `GET/POST` | `/api/v1/users` | Solo administrador |
 | `GET/PUT/DELETE` | `/api/v1/users/{id}` | Solo administrador |
 
+### Endpoints de la fase 3
+
+Todas las rutas llevan el prefijo `/api/v1` y el token Bearer. Las de lectura
+están disponibles para cualquier usuario autenticado, con el alcance de RN-20;
+las de escritura están restringidas por rol.
+
+| Método | Ruta | Acceso |
+|---|---|---|
+| `GET/POST` | `/clients` | Lectura: todos · Escritura: admin/gestor |
+| `GET/PUT/DELETE` | `/clients/{id}` | Lectura: todos · Escritura: admin/gestor |
+| `GET/POST` | `/projects` | Lectura: todos · Escritura: admin/gestor |
+| `GET/PUT/DELETE` | `/projects/{id}` | Según RN-20 (gestor solo los suyos) |
+| `GET/POST` | `/projects/{id}/team` | Admin/gestor del proyecto |
+| `GET/PUT/DELETE` | `/projects/{id}/team/{memberId}` | Admin/gestor del proyecto |
+| `GET/POST` | `/projects/{id}/hours` | Admin/gestor del proyecto |
+| `GET/PUT/DELETE` | `/projects/{id}/hours/{entryId}` | Admin/gestor del proyecto |
+| `GET/POST` | `/projects/{id}/technologies` | Admin/gestor del proyecto |
+| `DELETE` | `/projects/{id}/technologies/{technologyId}` | Admin/gestor del proyecto |
+| `GET` | `/roles` · `/roles/{id}` · `/roles/{id}/rates` | Autenticado |
+| `POST/PUT/DELETE` | `/roles` · `/roles/{id}` · `/roles/{id}/rates` | Solo administrador |
+| `GET` | `/rates/vigente?role=<code>&date=YYYY-MM-DD` | Autenticado |
+| `GET` | `/technologies` · `/technologies/{id}` | Autenticado |
+| `POST/PUT/DELETE` | `/technologies` · `/technologies/{id}` | Solo administrador |
+
+`GET /projects` acepta los filtros `client_id`, `manager_id` y `status=active|closed`.
+Las horas se envían en `hours` (decimales, mínimo `0.25`) y se guardan en
+minutos enteros junto al `rate_cents` vigente en `work_date`.
+
 ```bash
 # Iniciar sesión
 curl -s -X POST http://localhost:8000/api/v1/auth/login \
@@ -162,6 +191,29 @@ curl -s -X POST http://localhost:8000/api/v1/auth/login \
 # Consultar el perfil con el token recibido
 curl -s http://localhost:8000/api/v1/auth/me \
   -H "Authorization: Bearer <token>" -H 'Accept: application/json'
+```
+
+Ejemplo rápido de la fase 3 (usa el token del gestor):
+
+```bash
+TOKEN='<token>'
+API=http://localhost:8000/api/v1
+
+# Proyecto demo y su equipo
+curl -s $API/projects -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json'
+curl -s $API/projects/GOOMAPS_ID/team -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json'
+
+# Tarifa vigente para el desarrollador backend en una fecha
+curl -s "$API/rates/vigente?role=desarrollador_backend&date=2026-12-01" \
+  -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json'
+
+# Alta de persona y de horas (la tarifa se congela en el movimiento)
+curl -s -X POST $API/projects/GOOMAPS_ID/team \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Ana López","role_id":"ROLE_ID"}'
+curl -s -X POST $API/projects/GOOMAPS_ID/hours \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"team_member_id":"MEMBER_ID","work_date":"2026-12-01","hours":2.5}'
 ```
 
 Las respuestas de recursos usan el envoltorio `data` de Laravel; el login
@@ -180,12 +232,20 @@ Colecciones de MongoDB (los índices se crean con `migrate`):
 | `personal_access_tokens` | Tokens Sanctum hasheados, en MongoDB. |
 | `roles` | Catálogo de **roles de trabajo** (RN-03/RN-04), distinto de los roles de acceso. |
 | `role_rates` | Tarifa por hora, divisa y vigencia (`effective_from` / `effective_to`). |
-| `projects` | `client_id`, `manager_id`, snapshot de `budget_lines`, `extras` y `budget`. |
+| `projects` | `client_id`, `manager_id`, snapshot de `budget_lines`, `extras`, `budget` y `actual_cost_cents`. |
+| `team_members` | Personas asignadas a un proyecto con un rol de trabajo (RN-03). |
+| `time_entries` | Horas en minutos, tarifa y monto congelados del día del trabajo (RN-04). |
+| `technologies` | Catálogo de tecnologías (RN-05). |
+| `project_technologies` | Asociación proyecto ↔ tecnología con versión y nota. |
 
-RN-01 se cumple con `projects.manager_id`; `Project::isVisibleBy()` ya aplica
-RN-20 (administrador ve todo, gestor ve los suyos, cliente ve el suyo). Los
-montos se guardan en centavos enteros (`*_cents`) para que los totales cuadren
-sin error de coma flotante.
+RN-01 se cumple con `projects.manager_id`; `Project::scopeVisibleBy()` y las
+políticas aplican RN-20 (administrador ve todo, gestor ve sus proyectos, cliente
+ve los suyos). Los clientes, en cambio, se gestionan por CU-04: admin y gestor
+ven todos para poder crear proyectos; el usuario cliente solo ve su registro.
+Los montos se guardan en centavos enteros (`*_cents`) y las horas en minutos
+enteros para que los totales cuadren sin error de coma flotante.
+`effective_to` es **exclusivo**: al dar de alta una tarifa nueva se cierra la
+anterior en esa misma fecha, sin hueco ni traslape (RN-04).
 
 ### Presupuesto demo (sección 1.7)
 
@@ -206,13 +266,18 @@ Decisiones que también quedan registradas para las siguientes fases:
   un margen calculado sobre ventas.
 - Saldo facturable = `total − anticipos aplicados − facturas no canceladas`
   (se aplicará en la fase 4).
+- Las horas se registran con una tarifa en la divisa base del proyecto; la
+  conversión MXN/USD/EUR se agregará en la fase 4. Por eso no se mezclan
+  importes de divisas distintas en `actual_cost_cents`.
 - El Mapa del Dinero usa la **tasa vigente**; cada movimiento guarda su propio
   **snapshot del tipo de cambio** para reportes (fases 4 y 6).
 - Las facturas solo tienen dos estados: `emitida` o `cancelada`. Una factura
   emitida no se edita; se cancela con motivo y se genera otra (RN-09).
 - Los gastos no generan IVA acreditable y no afectan el margen (fase 4).
-- El cliente nunca ve tarifas individuales por persona, solo montos agregados
-  (RN-21), cuando se construya el portal en la fase 6.
+- RN-21 ya se aplica en la API: el cliente recibe solo montos agregados del
+  proyecto; `budget_lines`, extras y horas individuales se ocultan salvo que el
+  gestor active `show_rates_to_client`. El portal de la fase 6 consumirá este
+  mismo contrato.
 
 ## Variables de entorno
 
@@ -264,9 +329,11 @@ Se crean con `docker compose exec backend php artisan migrate --seed`:
 | Cliente | `cliente@goomaps.local` | `password` |
 
 El cliente demo queda vinculado a **Constructora del Valle** y el gestor demo
-es el responsable (`manager_id`) del proyecto `GOOMAPS-2026`. El seeder es
-idempotente: puede ejecutarse varias veces sin duplicar cuentas, roles ni
-proyectos, y sin cambiar contraseñas existentes.
+es el responsable (`manager_id`) del proyecto `GOOMAPS-2026`. El catálogo incluye
+6 tecnologías (Laravel, React, TypeScript, MongoDB, MariaDB y Docker), todas
+asociadas al proyecto demo. El seeder es idempotente: puede ejecutarse varias
+veces sin duplicar cuentas, roles, tarifas, tecnologías ni proyectos, y sin
+cambiar contraseñas existentes.
 
 ## Pruebas
 
@@ -274,12 +341,15 @@ proyectos, y sin cambiar contraseñas existentes.
 docker compose exec backend php artisan test
 ```
 
-La fase 2 cubre 20 pruebas: login, credenciales inválidas, usuarios
+La fase 3 deja 48 pruebas: login, credenciales inválidas, usuarios
 desactivados, `/me`, revocación de tokens, RBAC por rol (admin/gestor/cliente),
-validación de usuarios, hash de contraseñas, seeder idempotente, catálogo de
-tarifas con historial (RN-04), presupuesto exacto de la sección 1.7 y el
-diagnóstico de infraestructura. Las pruebas usan la base `goomaps_test` y
-jamás tocan `goomaps`; la suite completa de negocio se amplía en la fase 7.
+validación de usuarios, hash de contraseñas, seeder idempotente, presupuesto
+exacto de la sección 1.7, diagnóstico de infraestructura, CRUD de clientes y
+proyectos, alcance RN-20/RN-21, equipo, tecnologías, tarifas vigentes por fecha
+(RN-04) y registro/edición/borrado de horas con snapshot y recálculo del costo
+real (RN-03). Las pruebas usan la base `goomaps_test`, vacían sus colecciones
+conservando los índices y jamás tocan `goomaps`; la suite de finanzas y reportes
+se amplía en las fases 4 a 7.
 
 ## Estructura del proyecto
 
@@ -295,19 +365,20 @@ goomaps/
 │   └── frontend/Dockerfile     # Node 24 + Vite
 ├── backend/                    # Laravel 13 (API-only)
 │   ├── app/
-│   │   ├── Domain/Costs/       # BudgetCalculator (RN-15, montos en centavos)
+│   │   ├── Domain/Costs/       # BudgetCalculator (RN-15) y HourCost (RN-03)
 │   │   ├── Http/
-│   │   │   ├── Controllers/Api/V1/  # health, auth y usuarios
+│   │   │   ├── Controllers/Api/V1/  # health, auth, usuarios y recursos fase 3
 │   │   │   ├── Middleware/     # role y active
-│   │   │   ├── Requests/       # validación de login y usuarios
-│   │   │   └── Resources/      # representación JSON de modelos
-│   │   ├── Models/             # User, Client, Role, RoleRate, Project, tokens (MongoDB)
-│   │   └── Services/           # orquestación (siguientes fases)
+│   │   │   ├── Requests/       # validación por módulo
+│   │   │   └── Resources/      # representación JSON, sensible al rol (RN-21)
+│   │   ├── Models/             # User, Client, Project, Role, RoleRate, equipo, horas, tecnologías (MongoDB)
+│   │   ├── Policies/           # ClientPolicy y ProjectPolicy (RN-20)
+│   │   └── Services/           # RoleRateService y TimeEntryService
 │   ├── config/                 # database.php incluye la conexión mongodb
 │   ├── database/
 │   │   ├── migrations/         # colecciones e índices de MongoDB
 │   │   ├── factories/          # datos falsos para pruebas
-│   │   └── seeders/            # CatalogSeeder + DemoSeeder (presupuesto 1.7)
+│   │   └── seeders/            # CatalogSeeder + DemoSeeder (presupuesto 1.7 y tecnologías)
 │   ├── routes/api.php          # /api/v1
 │   └── tests/                  # Unit + Feature (base goomaps_test)
 └── frontend/                   # React + Vite + TypeScript
@@ -323,8 +394,8 @@ goomaps/
 - [x] **Fase 2.** Modelo MongoDB (proyectos con `manager_id`, catálogo
   `roles`/`role_rates`), autenticación Sanctum, roles RN-19/20 y seeder exacto
   de la sección 1.7.
-- [ ] **Fase 3.** Endpoints de clientes, proyectos, equipo, tarifas vigentes,
-  tecnologías y horas.
+- [x] **Fase 3.** Endpoints de clientes, proyectos, equipo, tarifas vigentes por
+  fecha, tecnologías y horas con tarifa congelada (RN-03/RN-04).
 - [ ] **Fase 4.** Anticipos, facturas, gastos, costos extra y divisas.
 - [ ] **Fase 5.** Bitácora de auditoría y reportes PDF/Excel.
 - [ ] **Fase 6.** Mapa del Dinero y portal del cliente.

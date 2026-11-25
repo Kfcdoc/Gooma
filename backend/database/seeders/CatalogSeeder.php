@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Role;
 use App\Models\RoleRate;
+use App\Models\Technology;
 use Illuminate\Database\Seeder;
 
 /**
@@ -70,6 +71,19 @@ class CatalogSeeder extends Seeder
         ];
     }
 
+    /** @return list<array{name:string,slug:string,category:string}> */
+    public static function technologies(): array
+    {
+        return [
+            ['name' => 'Laravel', 'slug' => 'laravel', 'category' => 'backend'],
+            ['name' => 'React', 'slug' => 'react', 'category' => 'frontend'],
+            ['name' => 'TypeScript', 'slug' => 'typescript', 'category' => 'frontend'],
+            ['name' => 'MongoDB', 'slug' => 'mongodb', 'category' => 'base_de_datos'],
+            ['name' => 'MariaDB', 'slug' => 'mariadb', 'category' => 'base_de_datos'],
+            ['name' => 'Docker', 'slug' => 'docker', 'category' => 'devops'],
+        ];
+    }
+
     public function run(): void
     {
         foreach (self::plannedRoles() as $data) {
@@ -92,6 +106,17 @@ class CatalogSeeder extends Seeder
                     'rate_cents' => $data['rate_cents'],
                     'effective_to' => null,
                     'notes' => 'Supuesto de planeación de la sección 1.7; no es un promedio de mercado.',
+                ],
+            );
+        }
+
+        foreach (self::technologies() as $data) {
+            Technology::updateOrCreate(
+                ['slug' => $data['slug']],
+                [
+                    'name' => $data['name'],
+                    'category' => $data['category'],
+                    'active' => true,
                 ],
             );
         }

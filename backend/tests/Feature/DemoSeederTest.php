@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\ProjectTechnology;
 use App\Models\Role;
 use App\Models\RoleRate;
+use App\Models\Technology;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -41,6 +43,11 @@ class DemoSeederTest extends TestCase
         $this->assertSame(1, Project::count());
 
         $project = Project::where('code', 'GOOMAPS-2026')->firstOrFail();
+
+        // RN-05: catálogo y asociaciones del proyecto demo, sin duplicados.
+        $this->assertSame(6, Technology::count());
+        $this->assertSame(6, ProjectTechnology::where('project_id', $project->getKey())->count());
+
         $gestor = User::where('email', 'gestor@goomaps.local')->firstOrFail();
         $cliente = User::where('email', 'cliente@goomaps.local')->firstOrFail();
 
